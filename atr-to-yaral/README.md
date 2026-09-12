@@ -53,6 +53,24 @@ Point it at a whole directory of ATR rules and it converts every convertible one
 ```bash
 atr-to-yaral path/to/agent-threat-rules/rules/ -o chronicle_rules.yaral
 ```
+## Deploying the output to a real Chronicle instance
+
+This tool stops at generating `.yaral` files. To actually validate and push them into Chronicle, use Google's own [`chronicle/detection-rules`](https://github.com/chronicle/detection-rules), specifically the `tools/content_manager` CLI inside it. It handles YARA-L validation against a live instance, rule creation and versioning, and enable/disable/archive state, all via the SecOps REST API.
+
+The full pipeline looks like this:
+
+```
+ATR YAML rules  →  atr-to-yaral  →  .yaral files  →  content_manager  →  live in Chronicle
+```
+
+```bash
+atr-to-yaral path/to/agent-threat-rules/rules/ -o chronicle_rules.yaral
+# then, using content_manager from chronicle/detection-rules:
+# validate the generated rules compile before pushing anything
+content_manager rules validate --file chronicle_rules.yaral
+```
+
+Validating your output this way is worth doing before trusting any generated rule: this project's own testing only confirms the output matches Google's documented YARA-L grammar, not that it compiles against a live instance. If you run generated rules through `content_manager` and hit a real compilation issue, please open one here, that's exactly the kind of gap this project needs found early.
 
 ## Install
 
