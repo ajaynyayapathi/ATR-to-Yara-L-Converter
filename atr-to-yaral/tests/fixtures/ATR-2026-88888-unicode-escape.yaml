@@ -1,0 +1,13 @@
+title: Rule using a braced unicode codepoint escape
+id: ATR-2026-88888
+severity: medium
+description: "Modeled on the real ATR finding of ~39 rules using \\u-style codepoint escapes for supplementary-plane characters (Unicode Tag block, U+E0000-U+E007F, used in tag-smuggling prompt injection). Written here in braced form since a bare 4-hex \\uXXXX cannot address a codepoint above U+FFFF. RE2 reads a passthrough \\u{...} as literal characters rather than the intended codepoint unless rewritten to \\x{...}."
+detection:
+  condition: any
+  conditions:
+    - field: content
+      operator: regex
+      value: "[\\u{E0001}\\u{E007F}]"
+test_cases:
+  true_positives:
+    - "payload with a hidden tag character: 󠀁"
