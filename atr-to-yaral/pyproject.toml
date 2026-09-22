@@ -4,13 +4,14 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "atr-to-yaral"
-version = "0.1.0"
+version = "0.2.0"
 description = "Convert Agent Threat Rules (ATR) YAML rules into YARA-L 2.0 rules for Google SecOps (Chronicle)."
 readme = "README.md"
 license = { file = "LICENSE" }
 requires-python = ">=3.10"
 dependencies = [
     "pyyaml>=6.0",
+    "google-re2>=1.1",
 ]
 
 [project.scripts]
