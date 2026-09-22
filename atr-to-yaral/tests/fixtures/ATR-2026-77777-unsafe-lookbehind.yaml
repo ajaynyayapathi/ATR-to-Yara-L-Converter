@@ -1,0 +1,9 @@
+title: Rule with an unsafe lookbehind
+id: ATR-2026-77777
+severity: medium
+detection:
+  condition: any
+  conditions:
+    - field: content
+      operator: regex
+      value: "(?<=api_key=)[a-zA-Z0-9]{32}"
