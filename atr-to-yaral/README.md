@@ -4,7 +4,7 @@ Convert [Agent Threat Rules (ATR)](https://github.com/Agent-Threat-Rule/agent-th
 
 ATR is an open, MIT-licensed detection standard for AI agent threats, prompt injection, tool poisoning, context exfiltration, and more, with 680+ rules already adopted by Microsoft's Agent Governance Toolkit, Cisco AI Defense, and MISP. Chronicle has no native way to consume it. This closes that gap for the rules that matter most: the regex-based detections that make up the large majority of the ATR corpus.
 
-This was prompted directly by an open, unresolved request on Google's own [`google/mcp-security` repository (issue #255)](https://github.com/google/mcp-security/issues/255), asking for a way to pull external rule packs like ATR into Chronicle through the SecOps MCP server. Nobody had built the conversion layer that request depends on. This is that layer.
+This was prompted by a feature request on Google's own [`google/mcp-security` repository (issue #255)](https://github.com/google/mcp-security/issues/255), asking for a way to pull external rule packs like ATR into Chronicle through the SecOps MCP server. A Google maintainer closed it, pointing instead to `chronicle/detection-rules`' `content_manager` tooling as the right place for this. This project is the conversion layer that path still needed: something that turns ATR YAML into `.yaral` files `content_manager` can then validate and push.
 
 ## What it does
 
@@ -53,6 +53,7 @@ Point it at a whole directory of ATR rules and it converts every convertible one
 ```bash
 atr-to-yaral path/to/agent-threat-rules/rules/ -o chronicle_rules.yaral
 ```
+
 ## Deploying the output to a real Chronicle instance
 
 This tool stops at generating `.yaral` files. To actually validate and push them into Chronicle, use Google's own [`chronicle/detection-rules`](https://github.com/chronicle/detection-rules), specifically the `tools/content_manager` CLI inside it. It handles YARA-L validation against a live instance, rule creation and versioning, and enable/disable/archive state, all via the SecOps REST API.
@@ -79,6 +80,18 @@ pip install -r requirements.txt
 python -m atr_to_yaral.cli --help
 ```
 
+## Regex compatibility: RE2, not PCRE
+
+Chronicle's YARA-L regex literals compile with [RE2](https://github.com/google/re2), the same engine behind Go's `regexp` package. RE2 does not support lookahead, lookbehind, or backreferences, and it spells Unicode codepoints differently than PCRE/JavaScript-style regex.
+
+This converter validates every regex against a real RE2 engine (via [`google-re2`](https://pypi.org/project/google-re2/)) before emitting it, not just against a hand-picked list of unsupported constructs:
+
+- **Unsupported constructs** (lookahead, lookbehind, backreferences, and anything else RE2's real compiler rejects) cause the rule to be skipped with the actual RE2 compiler error, not silently converted into something that will fail — or worse, silently misbehave — in Chronicle.
+- **`\uXXXX` / `\u{XXXXX}` Unicode escapes** (valid in PCRE/JS, not a Unicode codepoint escape in RE2) are mechanically rewritten to RE2's `\x{XXXX}` form before validation. Left alone, these compile under RE2 without error but match nothing resembling the intended codepoint — a silent-breakage case, not a compile failure. A rule with a rewritten escape gets a `converter_note` in its generated meta block so this is visible in the output, not just in this README.
+- **Embedded literal newlines** inside a regex value (most often introduced by a YAML block scalar in the source rule) are rejected outright. A YARA-L regex literal is `/`-delimited on a single line; a literal newline breaks that regardless of which engine is asked to compile it.
+
+**Known gap:** a UTF-16 surrogate pair used to express a supplementary-plane codepoint (two consecutive `\uD800`–`\uDBFF` / `\uDC00`–`\uDFFF` escapes) is not recombined by this translator. A pattern relying on a surrogate pair fails the RE2 compile check rather than being mistranslated — the safer failure mode, but still a gap. Use the braced `\u{XXXXX}` form in your ATR source if you need a codepoint above U+FFFF.
+
 ## The assumption you need to check before deploying anything this generates
 
 ATR rules match against agent-runtime content: LLM input, tool-call arguments, SKILL.md files. Chronicle's UDM has no standard field for that yet, because there is no standard way to ingest AI agent telemetry into Chronicle today. That's a real, currently-unsolved gap, not an oversight in this tool.
@@ -90,6 +103,10 @@ This converter defaults every generated rule to matching against `metadata.descr
 3. Re-run the converter with `--udm-field your.actual.field`.
 
 Rules generated against the wrong field will compile and load into Chronicle without error and will never fire. Test against known-positive samples before trusting any of these in production.
+
+## Canary testing
+
+Every converted rule can be checked against the ATR source rule's own `test_cases.true_positives` / `true_negatives` with `--canary`. This catches a rule whose regex logic doesn't actually fire on the traffic it claims to detect — a real failure mode independent of whether the pattern compiles at all. It does not prove a rule fires in a live Chronicle instance; only `content_manager` against a real deployment does that.
 
 ## Scope (v1)
 
