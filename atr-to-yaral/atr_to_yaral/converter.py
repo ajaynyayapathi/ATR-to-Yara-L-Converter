@@ -1,18 +1,11 @@
 """Converts ATR rules into YARA-L 2.0 rules for Google SecOps.
 
-Scope for v1: only ATR rules with operator: regex conditions are supported.
-That covers the large majority of published ATR rules (prompt injection,
-context exfiltration, and agent manipulation are almost entirely regex-based
-as of ATR's current rule corpus).
+Scope for v1: only ATR rules with operator: regex conditions are supported, and only patterns that actually compile as RE2 (Chronicle's regex engine) — see parser.py's compile_check(). That covers the large majority of
+published ATR rules.
 
-The open question this converter has to make an assumption about: ATR rules
-match against agent-runtime events (LLM input, tool-call arguments, SKILL.md
-content) and there is currently no standard UDM field where that content
-lands once ingested into Chronicle. This converter defaults to
-`metadata.description`, a generic free-text field present on any UDM event,
-and lets you override it with --udm-field to match your actual ingestion
-pipeline. See README.md for why this matters before you deploy anything
-generated here.
+The open question this converter has to make an assumption about: ATR rules match against agent-runtime events (LLM input, tool-call arguments, SKILL.md content) and there is currently no standard UDM field where that content
+lands once ingested into Chronicle. This converter defaults to `metadata.description`, a generic free-text field present on any UDM event, and lets you override it with --udm-field to match your actual ingestion
+pipeline. See README.md for why this matters before you deploy anything generated here.
 """
 
 from __future__ import annotations
@@ -50,6 +43,8 @@ def convert_rule(rule: AtrRule, udm_field: str = DEFAULT_UDM_FIELD) -> str:
     if rule.owasp_agentic:
         lines.append(f'    owasp_agentic = "{", ".join(rule.owasp_agentic)}"')
     lines.append('    source = "Converted from Agent Threat Rules (ATR) — https://github.com/Agent-Threat-Rule/agent-threat-rules"')
+    if rule.translated_unicode_escapes:
+        lines.append('    converter_note = "unicode escapes were rewritten for RE2 compatibility"')
 
     lines.append("")
     lines.append("  events:")
