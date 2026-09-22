@@ -23,6 +23,14 @@ def build_parser() -> argparse.ArgumentParser:
         "Change this to match wherever your pipeline puts agent/LLM content.",
     )
     p.add_argument("-o", "--output", help="Write output to this file instead of stdout")
+    p.add_argument(
+        "--canary",
+        action="store_true",
+        help="Run each rule's own test_cases (true_positives/true_negatives) against the "
+        "converted matching logic before emitting output, and report pass/fail. Exits "
+        "non-zero if any true_positive fails to match, since that means the rule wouldn't "
+        "fire even with a correctly populated field.",
+    )
     return p
 
 
@@ -40,9 +48,31 @@ def run(argv: list[str] | None = None) -> int:
         output = convert_rules(rules, udm_field=args.udm_field)
     else:
         from atr_to_yaral.converter import convert_rule
+        from atr_to_yaral.parser import UnsupportedRuleError
 
-        rule = load_rule(path)
+        try:
+            rule = load_rule(path)
+        except UnsupportedRuleError as e:
+            print(f"error: {e}", file=sys.stderr)
+            return 2
+        rules = [rule]
         output = convert_rule(rule, udm_field=args.udm_field) + "\n"
+
+    canary_failed = False
+    if args.canary:
+        from atr_to_yaral.canary import format_report, run_canary
+
+        print("", file=sys.stderr)
+        print("--- canary test results ---", file=sys.stderr)
+        for r in rules:
+            report = run_canary(r)
+            print(format_report(report), file=sys.stderr)
+            # A failed true_positive means the converted logic wouldn't fire
+            # even with a correctly populated field — that's a real defect,
+            # not just missing context, so it fails the run.
+            if any(f.case_type == "true_positive" for f in report.failures):
+                canary_failed = True
+        print("", file=sys.stderr)
 
     if args.output:
         Path(args.output).write_text(output, encoding="utf-8")
@@ -50,7 +80,7 @@ def run(argv: list[str] | None = None) -> int:
     else:
         print(output)
 
-    return 0
+    return 1 if canary_failed else 0
 
 
 def main() -> None:
