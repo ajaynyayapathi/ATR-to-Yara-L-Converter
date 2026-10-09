@@ -6,6 +6,9 @@ ATR is an open, MIT-licensed detection standard for AI agent threats, prompt inj
 
 This was prompted by a feature request on Google's own [`google/mcp-security` repository (issue #255)](https://github.com/google/mcp-security/issues/255), asking for a way to pull external rule packs like ATR into Chronicle through the SecOps MCP server. A Google maintainer closed it, pointing instead to `chronicle/detection-rules`' `content_manager` tooling as the right place for this. This project is the conversion layer that path still needed: something that turns ATR YAML into `.yaral` files `content_manager` can then validate and push.
 
+Listed as a Tier 2 adapter in the ATR ADOPTERS registry
+https://github.com/Agent-Threat-Rule/agent-threat-rules/blob/main/ADOPTERS.md
+
 ## What it does
 
 ```bash
